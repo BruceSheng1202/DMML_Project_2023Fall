@@ -1,0 +1,277 @@
+---
+title: "Statistical Inference Practice in Heart Attack Risk "
+author: "Your Name Here"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(openintro)
+library(e1071)
+library(ggplot2)
+knitr::opts_knit$set(root.dir = here::here())
+setwd(here::here())
+```
+
+
+
+# Abstract
+The risk of heart disease is a growing concern for cardiovascular health, which claims millions of lives around the world each year. Therefore, how to control the threat of this disease to human health has become a very important issue. Doctors are focused on how to prevent heart attacks in patients at a time when people are curious about a healthier lifestyle for the heart. Therefore, this data analysis report conducted Multilevel regression based on a multiple Logistic regression model to explore the effects of various clinical indicators and lifestyle habits on the risk of heart disease. According to the analysis results, some life suggestions are put forward for people. However, this model is not accurate enough, due to interpretability concerns, and machine learning and deep learning methods are not presented in this report. In the future, we will explore the machine learning model with high interpretability and better fitting prediction effect for further research.
+
+
+## Keywords: 
+Multilevel Regression Model, Heart Attack Risk, Health Information.
+
+
+# Introduction
+
+According to WHO's 2019 Global Health Estimates Report, heart disease remains the number one killer of deaths from disease and injury in the early 2000s. Every year, millions of people around the world are killed by heart disease, which is a growing threat to people's health and security. Therefore, it is very important to study the risk of heart disease and people's clinical indicators and lifestyle habits. Clinicians were curious: How could they tell if a patient was at risk for cardiovascular disease based on cholesterol, Triglycerides and blood pressure? People are also concerned: What kind of routine can protect them from heart disease? Therefore, this data analysis report uses multiple Logistic regression models to explore these issues, hoping to make some contributions to reducing the incidence and mortality of heart disease.
+
+# Data
+
+## Data Collection Process
+
+This is a clinical diagnostic data on heart disease risk collected from 20 countries in the northern and southern hemispheres and continents, including Argentina, Australia, Brazil, Canada, China, Colombia, France, Germany, India, Italy, Japan, New Zealand, Nigeria, South Africa, South Korea, Spain, Thailand, UK, Vietnam and USA. This data set comes from kaggle and could be downloaded in website(https://www.kaggle.com/datasets/iamsouravbanerjee/heart-attack-prediction-dataset/data). The data set includes information on more than 8,000 patients, including their medical tests and lifestyle habits. Multiple Logistic regression models can be used to determine the relationship between heart disease risk and patients' medical indicators and lifestyle habits. 
+
+
+## Data Summary
+```{r}
+data <- read.csv("heart_attack_prediction_dataset.csv")
+```
+Do the data wrangling firstly. After observation, it can be found that there are many character data in the data set, which needs to be modified column by column. For example, in the gender column, if male is 1 and female is 0, the meaning of this variable in the regression will be expressed as the chance of heart disease caused by gender differences.
+```{r}
+data$Sex <- ifelse(data$Sex == "Male", 1, 0)
+```
+
+Similarly, modify other columns into a form that could be easily analysed.
+```{r}
+data$Blood.Pressure <- as.character(data$Blood.Pressure)
+split_values  <- strsplit(data$Blood.Pressure, "/")
+data$High.Blood.Pressure <- as.numeric(sapply(split_values, function(x) as.numeric(x[1])))
+data$Low.Blood.Pressure <- as.numeric(sapply(split_values, function(x) as.numeric(x[2])))
+data <- data[, -which(names(data) == "Blood.Pressure")]
+
+data$Unhealthy.Diet <- ifelse(data$Diet == "Unhealthy", 1, 0)
+data$Healthy.Diet <- ifelse(data$Diet == "Healthy", 1, 0)
+data <- data[, -which(names(data) == "Diet")]
+```
+
+```{r}
+y <- data$Heart.Attack.Risk
+```
+
+Use box plot to present the data distribution. From these figures, it is interesting that the data distributions all look like normal distribution, which is a good news for linear models application.
+```{r}
+par(mfrow=c(2, 2))
+boxplot(data.frame(ExHr = data$Exercise.Hours.Per.Week,
+                   SeHr = data$Sedentary.Hours.Per.Day,
+                   BMI = data$BMI,
+                   SlHr = data$Sleep.Hours.Per.Day,
+                   SL = data$Stress.Level
+                   ),
+        main="Box Plot of ExHr,SeHr,BMI,SlHr&SL", col="lightblue", border="blue", notch=FALSE, horizontal=FALSE)
+boxplot(data.frame(Age = data$Age, 
+                   HtRt = data$Heart.Rate,
+                   HHP = data$High.Blood.Pressure,
+                   LHP = data$Low.Blood.Pressure
+                   ),
+        main="Box Plot of Age,HtRt,HHP&LHP", col="lightblue", border="blue", notch=FALSE, horizontal=FALSE)
+boxplot(data.frame(Income = data$Income), 
+        main="Box Plot of Income", col="lightblue", border="blue", notch=FALSE, horizontal=FALSE)
+boxplot(data.frame(Trig = data$Triglycerides, Chol = data$Cholesterol),
+        main="Box Plot of Trig&Chol", col="lightblue", border="blue", notch=FALSE, horizontal=FALSE)
+```
+```{r}
+ggplot(data, aes(x = Age, fill = factor(y))) +
+  geom_density(alpha = 0.5)+
+  labs(title = "Relation between Age and Heart Attack", x = "Age", y = "Heart Attack")
+```
+From the Relation between Age and Heart Attack, it appears that middle-aged people are less likely to be at risk of heart disease than younger and older people.
+
+```{r}
+ggplot(data, aes(x = High.Blood.Pressure, fill = factor(y))) +
+  geom_density(alpha = 0.5)+
+  labs(title = "Relation between High.Blood.Pressure and Heart Attack", x = "High.Blood.Pressure", y = "Heart Attack")
+```
+From the Relation between High.Blood.Pressure and Heart Attack, it seems that if a person's High.Blood.Pressure is lower than 120, he or she is relatively free of the risk of heart attack.
+
+```{r}
+ggplot(data, aes(x = Exercise.Hours.Per.Week, fill = factor(y))) +
+  geom_density(alpha = 0.5)+
+  labs(title = "Relation between Exercise.Hours.Per.Week and Heart Attack", x = "Exercise.Hours.Per.Week", y = "Heart Attack")
+```
+It is often said that active exercise contributes to physical and mental health. But from this figure, we found that if the Exercise.Hours.Per..Week is more than 10, it seems to be more likely to cause heart disease.
+
+```{r}
+ggplot(data, aes(x = Income, fill = factor(y))) +
+  geom_density(alpha = 0.5)+
+  labs(title = "Relation between Income and Heart Attack", x = "Income", y = "Heart Attack")
+```
+
+There did not appear to be a significant relationship between income and heart disease risk.
+
+```{r}
+ggplot(data, aes(x = Triglycerides, fill = factor(y))) +
+  geom_density(alpha = 0.5)+
+  labs(title = "Relation between Triglycerides and Heart Attack", x = "Triglycerides", y = "Heart Attack")
+```
+
+According to medical wisdom, high levels of plasma triglycerides can be associated with an increased risk of cardiovascular disease. This picture seems to confirm it.
+
+# Methods
+
+A Multilevel Regression Model is a statistical model used to analyze hierarchical data. It is also known as a Hierarchical Linear Model (HLM), Mixed-Effects Model, or Random Effects Model. This model is suitable for situations where research data contains multiple hierarchies, where observations (individuals, groups, or other units) belong to different groups at different levels and may be influenced by their respective levels.
+
+The basic idea of a multilevel regression model is to consider multiple levels of variability simultaneously when analyzing data. These levels can be formalized by the following formula:
+
+First: Let's divide the data set into 2 parts by the variable Hemisphere. Namely, a single data point belongs to Northern Hemisphere or Southern Hemisphere and the information of Continent and Country are ignored here. Here Hemisphere of a single data point equals to 1 means the patient lives in Northern Hemisphere. Thus the $\beta$ estimated for it denotes the difference of impact in heart attack between 2 half Hemispheres. 
+
+$$
+Y = BX_1 + \epsilon \quad (1)
+$$
+
+```{r}
+data$Hemisphere<- ifelse(data$Hemisphere == "Northern Hemisphere", 1, 0)
+X_Hemisphere <- data[, -which(names(data) %in%  c("Patient.ID","Country","Continent","Heart.Attack.Risk"))]
+
+model_Hemisphere <- glm(y ~ ., data = cbind(X_Hemisphere,y), family = binomial(link = "logit"))
+```
+
+Second: Let's divide the data set into 6 parts by the variable Continent. Namely, a single data point belongs to its continent and the information of Country are ignored here. One patient is assumed to live in North America by default, so no binary variable for North America is set in $X_2$. Hemisphere remains here for some continents straddle the northern and southern hemispheres. 
+
+$$
+Y = BX_2 + \epsilon \quad (2)
+$$
+
+```{r}
+data$Africa <- ifelse(data$Continent == "Africa", 1, 0)
+data$Asia <- ifelse(data$Continent == "Asia", 1, 0)
+data$Australia <- ifelse(data$Continent == "Australia", 1, 0)
+data$Europe <- ifelse(data$Continent == "Europe", 1, 0)
+data$SouthAmerica <- ifelse(data$Continent == "South America", 1, 0)
+
+X_Continent <- data[, -which(names(data) %in% c("Patient.ID","Country","Continent","Heart.Attack.Risk"))]
+
+model_Continent <- glm(y ~ ., data = cbind(X_Continent,y), family = binomial(link = "logit"))
+```
+
+Third: Let's move the hierarchy down to the national level, where different patients come from different countries. Patients in each country were observed to be from the same hemisphere or continent. This is especially true in countries that straddle the northern and southern hemispheres, such as Colombia and Brazil. So here we delete the two variables of Continent and Hemisphere. And one patient is assumed to live in United States by default, so no binary variable for US is set in $X_3$.
+$$
+Y = BX_3 + \epsilon \quad (3)
+$$
+
+
+```{r}
+data$Argentina <- ifelse(data$Country == "Argentina", 1, 0)      
+data$Australia1 <- ifelse(data$Country == "Australia", 1, 0)          
+data$Brazil <- ifelse(data$Country == "Brazil", 1, 0) 
+data$Canada <- ifelse(data$Country == "Canada", 1, 0) 
+data$China <- ifelse(data$Country == "China", 1, 0) 
+data$Colombia <- ifelse(data$Country == "Colombia", 1, 0) 
+data$France <- ifelse(data$Country == "France", 1, 0)        
+data$Germany <- ifelse(data$Country == "Germany", 1, 0)           
+data$India <- ifelse(data$Country == "India", 1, 0)           
+data$Italy <- ifelse(data$Country == "Italy", 1, 0) 
+data$Japan <- ifelse(data$Country == "Japan", 1, 0)     
+data$NewZealand <- ifelse(data$Country == "New Zealand", 1, 0)         
+data$Nigeria <- ifelse(data$Country == "Nigeria", 1, 0)    
+data$SouthAfrica <- ifelse(data$Country == "South Africa", 1, 0)     
+data$SouthKorea <- ifelse(data$Country == "South Korea", 1, 0) 
+data$Spain <- ifelse(data$Country == "Spain", 1, 0)        
+data$Thailand <- ifelse(data$Country == "Thailand", 1, 0)  
+data$UK <- ifelse(data$Country == "United Kingdom", 1, 0)   
+data$Vietnam <- ifelse(data$Country == "Vietnam", 1, 0) 
+
+X_Country <- data[, -which(names(data) %in%  c("Patient.ID","Country","Continent","Heart.Attack.Risk",
+                    "Africa","Asia","Australia","Europe","SouthAmerica",
+                    "Hemisphere"))]
+
+model_Country <- glm(y ~ ., data = cbind(X_Country,y), family = binomial(link = "logit"))
+```
+
+
+# Results 
+
+After constructing the three multiple logistic regression models, the summary() function is used to obtain the model results. Through observation and analysis, it is found that it is difficult to get accurate fitting because of the quality of variables. Some machine learning methods, such as random forest algorithms and support vector machine algorithms, have also been tried, but the results are not good enough. The final choice is to present only the results of multiple regression analysis and conduct the appropriate analysis.
+
+
+```{r}
+summary(model_Hemisphere)
+```
+
+For model_Hemisphere, the summary report found that people living in the Northern Hemisphere were significantly more likely to have heart disease than those living in the southern hemisphere.
+
+
+```{r}
+summary(model_Continent)
+```
+However, people on other continents are not significantly more exposed to heart disease than North Americans, according to model_Continent's summary report.
+
+
+```{r}
+summary(model_Country)
+```
+Interestingly, from the summary report of model_Country, it can be seen that Indians, Italians and Japanese are significantly less likely to get heart disease than Americans, and the two variables of India and Italy are very significant, which may be due to the different genetic genes and living habits of people in different countries. Moreover, regression parameters for most other countries are negative, and positive regression parameters (such as Nigeria and South Korea) are very insignificant, which may indicate that the United States, Nigeria and South Korea are the countries with the highest incidence of heart disease among these countries.
+
+```{r}
+selected_countries <- c("Japan", "Italy", "India", "United States")
+subset_data <- data[data$Country %in% selected_countries,]
+
+ggplot(subset_data, aes(x = Country, fill = factor(Heart.Attack.Risk))) +
+  geom_bar() +
+  labs(title = "Heart disease in patients by country", x = "Country", y = "Heart Attack") +
+  scale_fill_manual(values = c("0" = "light blue", "1" = "light green")) +
+  theme_minimal()
+```
+
+
+# Conclusions
+
+To sum up, this data analysis report draws the following conclusions and puts forward some relevant recommendations. 
+
+## Correlation analysis
+According to the correlation analysis:
+
+1. Adolescents and the elderly have higher risk of heart disease than middle-aged people.
+
+2. There is a strong correlation between high blood pressure and heart disease.
+
+3. Moderate exercise can help cardiovascular health, but too much exercise can lead to a more serious risk of heart disease.
+
+4. The correlation between income and heart disease risk was not significant.
+
+5. Too low or too high triglycerides may lead to an increased risk of heart disease. 
+
+## Regression analysis
+According to regression analysis: 
+
+1. Cholesterol, High blood pressure and family history have significant positive effects on heart disease risk.
+
+2. People with diabetes are more likely to develop heart disease.
+
+3. Adequate sleep time contributes to cardiovascular health.
+
+4. There are no significant differences in heart disease risk between continents, but Indians, Italians and Japanese have significantly lower risk of heart disease than Americans.
+
+## Suggestions on people's life
+1. young people should pay more attention to healthy living habits, the elderly should always pay attention to their own health indicators.
+
+2. High blood pressure, high cholesterol and high triglycerides are red flags for heart attack.
+
+3. Diabetes patients should be more concerned about their cardiovascular health.
+
+4. Maintain adequate sleep more than 7 hours a day and exercise less than 10 hours a week.
+
+5. Learn about Indian, Japanese and Italian lifestyles and eating habits.
+
+
+## Weaknesses
+The sample size of the data is sufficient, but it does not fully reveal the impact of clinical indicators and lifestyle habits on heart disease risk. If you use dimensionality reduction methods such as PCA, or machine learning and deep learning methods, you can indeed get better accuracy for prediction, but these methods lack interpretability, so it is difficult to make recommendations for clinicians' diagnoses and people's lifestyle habits. Perhaps some more advanced interpretable machine learning methods can be applied to this dataset to get more accurate advice and help.
+
+## Ethics Statement
+First, this report highlight the data sources. This study uses open data, which means that it relies on publicly available data resources that do not involve the collection of personal privacy or sensitive information. This decision was made out of respect for data privacy, while also contributing to the reproducibility and transparency of the research. We are committed to ensuring the legality and ethics of data in order to avoid infringement of data providers.
+
+Second, this report focused on ethical issues in the model development and evaluation process. This study did not make P-value adjustments to prevent excessive pursuit of statistical significance from leading to spurious findings. This report emphasize the interpretability of the model rather than just focusing on the predictive accuracy of the model. This is to ensure that our research findings can be understood and trusted by the wider community, rather than just relying on a black box model. 
